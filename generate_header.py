@@ -3,18 +3,22 @@ import sys
 def process_line(line, degrees, coeffs, dnumbers):
     if not len(line) >= 4:
         print("Input file does not have the expected format!", file = sys.stderr)
+        exit(2)
     
     dim = int(line[0])
     if not dim >= 2:
         print("Input file does not have the expected format - dimension < 2", file = sys.stderr)
+        exit(2)
 
     degree = int(line[1])
     if not degree >= 1:
         print("Input file does not have expected format - degree < 1", file = sys.stderr)
+        exit(2)
     elif not len(line) == 4 + degree - 1:
         print("Input file does not have expected format - line length is {} but should be {}"
             .format(len(line), 4 + degree - 1),
             file = sys.stderr)
+        exit(2)
 
     degrees.append(degree)
     coeffs.append(int(line[2]))
