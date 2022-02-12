@@ -18,23 +18,6 @@ namespace Sobol
 namespace detail
 {
 
-template <auto Val>
-constexpr auto type_constant = std::integral_constant<std::decay_t<decltype(Val)>, Val>{};
-
-template <int Start, class F, int... Is>
-void compile_time_for(F &&f, std::integer_sequence<int, Is...>)
-{
-    (static_cast<void>(f(type_constant<Is>)), ...);
-}
-
-template <int Start, int Stop, class F>
-void compile_time_for(F &&f)
-{
-    static_assert(Stop >= Start);
-    constexpr auto index_sequence = std::make_integer_sequence<int, Stop - Start>();
-    compile_time_for<Start>(std::forward<F>(f), index_sequence);
-}
-
 #ifdef __GNUC__
 
 int count_trailing_ones(long unsigned i) { return __builtin_ctzl(~i); }
@@ -171,10 +154,11 @@ constexpr IntType
 advance_sequence(std::array<T, Dim> &point, std::array<IntType, Dim> &x, IntType index)
 {
     constexpr auto direction_numbers = detail::get_direction_numbers_array<IntType, Dim>();
-    detail::compile_time_for<0, Dim>([&](auto I) {
-        x[I()] = x[I()] ^ direction_numbers[I()][count_trailing_ones(index - 1)];
-        point[I()] = x[I()] / std::pow(static_cast<T>(2), DirectionNumbers<IntType>::nbits);
-    });
+    for (unsigned i = 0; i < Dim; ++i)
+    {
+        x[i] = x[i] ^ direction_numbers[i][count_trailing_ones(index - 1)];
+        point[i] = x[i] / std::pow(static_cast<T>(2), DirectionNumbers<IntType>::nbits);
+    }
     return index + 1;
 }
 
