@@ -153,8 +153,8 @@ namespace detail
  * Returns the index for the next point (index + 1).
  */
 template <class IntType, class T, typename = std::enable_if_t<std::is_floating_point_v<T>>>
-constexpr unsigned long advance_sequence(
-    unsigned ndims, T *point, IntType *x, unsigned long index,
+constexpr IntType advance_sequence(
+    unsigned ndims, T *point, IntType *x, IntType index,
     const std::vector<std::array<IntType, DirectionNumbers<IntType>::nbits>> &dnums)
 {
     assert(ndims <= dnums.size());
@@ -167,8 +167,8 @@ constexpr unsigned long advance_sequence(
 }
 
 template <class IntType, class T, size_t Dim>
-constexpr unsigned long
-advance_sequence(std::array<T, Dim> &point, std::array<IntType, Dim> &x, unsigned long index)
+constexpr IntType
+advance_sequence(std::array<T, Dim> &point, std::array<IntType, Dim> &x, IntType index)
 {
     constexpr auto direction_numbers = detail::get_direction_numbers_array<IntType, Dim>();
     detail::compile_time_for<0, Dim>([&](auto I) {
@@ -183,7 +183,7 @@ advance_sequence(std::array<T, Dim> &point, std::array<IntType, Dim> &x, unsigne
 template <class IntType = uint32_t, class T = double>
 class Sequence
 {
-    static_assert(std::is_floating_point_v<T> && std::is_integral_v<IntType>);
+    static_assert(std::is_floating_point_v<T> && std::is_integral_v<IntType> && std::is_unsigned_v<IntType>);
 
   public:
     Sequence(int N)
@@ -206,16 +206,16 @@ class Sequence
     }
 
   private:
-    unsigned long m_index;
     std::unique_ptr<IntType[]> m_x;
     std::unique_ptr<T[]> m_point;
     std::vector<std::array<IntType, DirectionNumbers<IntType>::nbits>> m_dnums;
+    IntType m_index;
 };
 
 template <unsigned Dim, class IntType = uint32_t, class T = double>
 class CompileTimeSequence
 {
-    static_assert(std::is_floating_point_v<T> && std::is_integral_v<IntType>);
+    static_assert(std::is_floating_point_v<T> && std::is_integral_v<IntType> && std::is_unsigned_v<IntType>);
 
   public:
     constexpr CompileTimeSequence() noexcept
@@ -232,9 +232,9 @@ class CompileTimeSequence
     }
 
   private:
-    unsigned long m_index;
     std::array<IntType, Dim> m_x;
     std::array<T, Dim> m_point;
+    IntType m_index;
 };
 
 } // namespace Sobol
