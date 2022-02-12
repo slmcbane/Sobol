@@ -180,7 +180,7 @@ advance_sequence(std::array<T, Dim> &point, std::array<IntType, Dim> &x, unsigne
 
 } // namespace detail
 
-template <class T = double, class IntType = uint64_t>
+template <class IntType = uint32_t, class T = double>
 class Sequence
 {
     static_assert(std::is_floating_point_v<T> && std::is_integral_v<IntType>);
@@ -212,7 +212,7 @@ class Sequence
     std::vector<std::array<IntType, DirectionNumbers<IntType>::nbits>> m_dnums;
 };
 
-template <unsigned Dim, class T = double, class IntType = uint64_t>
+template <unsigned Dim, class IntType = uint32_t, class T = double>
 class CompileTimeSequence
 {
     static_assert(std::is_floating_point_v<T> && std::is_integral_v<IntType>);
