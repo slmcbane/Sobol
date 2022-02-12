@@ -230,25 +230,6 @@ class CompileTimeSequence
  *******************************************************************************/
 #ifdef DOCTEST_LIBRARY_INCLUDED
 
-TEST_CASE("Test compile_time_for")
-{
-
-    int x[10] = {0};
-
-    Sobol::detail::compile_time_for<0, 10>([&](auto I) {
-        for (int i = I(); i < 10; ++i)
-        {
-            x[i] += 1;
-        }
-    });
-
-    for (int i = 0; i < 10; ++i)
-    {
-        REQUIRE(x[i] == i + 1);
-    }
-
-} // TEST_CASE
-
 #endif // DOCTEST_LIBRARY_INCLUDED
 
 #endif // SOBOL_SEQUENCE_HEADER_INCLUDED
