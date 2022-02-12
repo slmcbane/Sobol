@@ -1,6 +1,7 @@
 #ifndef SOBOL_SEQUENCE_HEADER_INCLUDED
 #define SOBOL_SEQUENCE_HEADER_INCLUDED
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cmath>
@@ -119,7 +120,7 @@ constexpr auto get_direction_numbers_array()
     std::array<std::array<IntType, DirectionNumbers<IntType>::nbits>, maxdims> direction_numbers{
         0};
 
-    for (int i = 0; i < direction_numbers.size(); ++i)
+    for (unsigned i = 0; i < direction_numbers.size(); ++i)
     {
         direction_numbers[i] = DirectionNumbers<IntType>(i + 1).numbers();
     }
@@ -151,34 +152,31 @@ namespace detail
  * If index is not correct neither will be the sequence.
  * Returns the index for the next point (index + 1).
  */
-template <
-    class IntType, class T, typename = std::enable_if_t<std::is_floating_point_v<T>>>
-constexpr unsigned long advance_sequence(unsigned ndims, T *point, IntType *x, unsigned long index,
+template <class IntType, class T, typename = std::enable_if_t<std::is_floating_point_v<T>>>
+constexpr unsigned long advance_sequence(
+    unsigned ndims, T *point, IntType *x, unsigned long index,
     const std::vector<std::array<IntType, DirectionNumbers<IntType>::nbits>> &dnums)
 {
     assert(ndims <= dnums.size());
     for (unsigned j = 0; j < ndims; ++j)
     {
-        x[j] = x[j] ^ dnums[j][count_trailing_ones(index-1)];
+        x[j] = x[j] ^ dnums[j][count_trailing_ones(index - 1)];
         point[j] = x[j] / std::pow(static_cast<T>(2), DirectionNumbers<IntType>::nbits);
     }
     return index + 1;
 }
 
-/*
-template <
-    int ndims, int maxdims = ndims, class IntType, class T,
-    typename = std::enable_if_t<std::is_floating_point_v<T>>>
-constexpr unsigned long advance_sequence(T *point, IntType *x, unsigned long index)
+template <class IntType, class T, size_t Dim>
+constexpr unsigned long
+advance_sequence(std::array<T, Dim> &point, std::array<IntType, Dim> &x, unsigned long index)
 {
-    static_assert(ndims <= maxdims);
-    constexpr auto direction_numbers = detail::get_direction_numbers_array<IntType, maxdims>();
-    detail::compile_time_for<0, ndims>([=](auto I) {
-        x[I()] = x[I()] ^ direction_numbers[I()][count_trailing_ones(index) + 1];
-        point[I()] = point[I()] / std::pow(static_cast<T>(2), 64);
+    constexpr auto direction_numbers = detail::get_direction_numbers_array<IntType, Dim>();
+    detail::compile_time_for<0, Dim>([&](auto I) {
+        x[I()] = x[I()] ^ direction_numbers[I()][count_trailing_ones(index - 1)];
+        point[I()] = x[I()] / std::pow(static_cast<T>(2), DirectionNumbers<IntType>::nbits);
     });
     return index + 1;
-} */
+}
 
 } // namespace detail
 
@@ -202,7 +200,8 @@ class Sequence
 
     const std::unique_ptr<T[]> &advance() noexcept
     {
-        m_index = detail::advance_sequence(dimension(), m_point.get(), m_x.get(), m_index, m_dnums);
+        m_index =
+            detail::advance_sequence(dimension(), m_point.get(), m_x.get(), m_index, m_dnums);
         return m_point;
     }
 
@@ -211,6 +210,31 @@ class Sequence
     std::unique_ptr<IntType[]> m_x;
     std::unique_ptr<T[]> m_point;
     std::vector<std::array<IntType, DirectionNumbers<IntType>::nbits>> m_dnums;
+};
+
+template <unsigned Dim, class T = double, class IntType = uint64_t>
+class CompileTimeSequence
+{
+    static_assert(std::is_floating_point_v<T> && std::is_integral_v<IntType>);
+
+  public:
+    constexpr CompileTimeSequence() noexcept
+        : m_index{1}, m_x{0}, m_point{0}
+    {
+    }
+
+    constexpr const auto &get_point() const noexcept { return m_point; }
+
+    constexpr const auto &advance() noexcept
+    {
+        m_index = detail::advance_sequence(m_point, m_x, m_index);
+        return m_point;
+    }
+
+  private:
+    unsigned long m_index;
+    std::array<IntType, Dim> m_x;
+    std::array<T, Dim> m_point;
 };
 
 } // namespace Sobol
