@@ -4,7 +4,7 @@
 #include <array>
 #include <cassert>
 #include <cmath>
-#include <iterator>
+#include <memory>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -79,7 +79,7 @@ struct DirectionNumbers
     {
         if (dim == 1)
         {
-            for (int i = 0; i < nbits; ++i)
+            for (unsigned i = 0; i < nbits; ++i)
             {
                 m_numbers[i] = IntType(1) << (nbits - i - 1);
             }
@@ -88,14 +88,14 @@ struct DirectionNumbers
         {
             const auto degree = degrees[dim - 2];
             const auto a = coeffs[dim - 2];
-            for (int i = 0; i < degree; ++i)
+            for (uint8_t i = 0; i < degree; ++i)
             {
                 m_numbers[i] = ms[dim - 2][i] << (nbits - i - 1);
             }
-            for (int i = degree; i < nbits; ++i)
+            for (unsigned i = degree; i < nbits; ++i)
             {
-                m_numbers[i] = m_numbers[i - degree + 1] ^ (m_numbers[i - degree + 1] >> degree);
-                for (int j = 0; j < degree - 1; ++j)
+                m_numbers[i] = m_numbers[i - degree] ^ (m_numbers[i - degree] >> degree);
+                for (uint8_t j = 0; j < degree - 1; ++j)
                 {
                     m_numbers[i] ^= (((a >> (degree - 2 - j)) & 1) * m_numbers[i - j - 1]);
                 }
@@ -103,7 +103,7 @@ struct DirectionNumbers
         }
     }
 
-    constexpr std::array<IntType, nbits> numbers() noexcept { return m_numbers; }
+    constexpr const std::array<IntType, nbits> &numbers() noexcept { return m_numbers; }
 
   private:
     std::array<IntType, nbits> m_numbers;
@@ -127,6 +127,20 @@ constexpr auto get_direction_numbers_array()
     return direction_numbers;
 }
 
+template <class IntType>
+auto get_direction_numbers(unsigned ndims)
+{
+    assert(ndims <= sizeof(coeffs) / sizeof(coeffs[0]) + 1);
+
+    std::vector<std::array<IntType, DirectionNumbers<IntType>::nbits>> direction_numbers;
+    direction_numbers.reserve(ndims);
+    for (unsigned i = 0; i < ndims; ++i)
+    {
+        direction_numbers.emplace_back(DirectionNumbers<IntType>(i + 1).numbers());
+    }
+    return direction_numbers;
+}
+
 } // namespace detail
 
 namespace detail
@@ -138,19 +152,20 @@ namespace detail
  * Returns the index for the next point (index + 1).
  */
 template <
-    int maxdims, class IntType, class T, typename = std::enable_if_t<std::is_floating_point_v<T>>>
-constexpr unsigned long advance_sequence(int ndims, T *point, IntType *x, unsigned long index)
+    class IntType, class T, typename = std::enable_if_t<std::is_floating_point_v<T>>>
+constexpr unsigned long advance_sequence(unsigned ndims, T *point, IntType *x, unsigned long index,
+    const std::vector<std::array<IntType, DirectionNumbers<IntType>::nbits>> &dnums)
 {
-    assert(ndims <= maxdims);
-    constexpr auto direction_numbers = detail::get_direction_numbers_array<IntType, maxdims>();
-    for (int j = 0; j < ndims; ++j)
+    assert(ndims <= dnums.size());
+    for (unsigned j = 0; j < ndims; ++j)
     {
-        x[j] = x[j] ^ direction_numbers[j][count_trailing_ones(index) + 1];
-        point[j] = x[j] / std::pow(static_cast<T>(2), 64);
+        x[j] = x[j] ^ dnums[j][count_trailing_ones(index-1)];
+        point[j] = x[j] / std::pow(static_cast<T>(2), DirectionNumbers<IntType>::nbits);
     }
     return index + 1;
 }
 
+/*
 template <
     int ndims, int maxdims = ndims, class IntType, class T,
     typename = std::enable_if_t<std::is_floating_point_v<T>>>
@@ -163,60 +178,39 @@ constexpr unsigned long advance_sequence(T *point, IntType *x, unsigned long ind
         point[I()] = point[I()] / std::pow(static_cast<T>(2), 64);
     });
     return index + 1;
-}
+} */
 
 } // namespace detail
 
-template <
-    int ndims = -1, int maxdims = (ndims > 0 ? ndims : sizeof(coeffs) / sizeof(coeffs[0]) + 1),
-    class T = double, class IntType = uint64_t>
-class SequenceIterator : public std::iterator<std::input_iterator_tag, const std::vector<T>>
+template <class T = double, class IntType = uint64_t>
+class Sequence
 {
-    static_assert(ndims == -1 || ndims >= 1);
+    static_assert(std::is_floating_point_v<T> && std::is_integral_v<IntType>);
 
   public:
-    template <bool NotDynamic = (ndims > 0), std::enable_if_t<NotDynamic, int> = 0>
-    SequenceIterator() : m_index{1}, m_x(ndims, 0), m_point(ndims, 0)
+    Sequence(int N)
+        : m_index{1}, m_x(new IntType[N]), m_point(new T[N]),
+          m_dnums(detail::get_direction_numbers<IntType>(N))
     {
+        std::fill(m_x.get(), m_x.get() + N, 0);
+        std::fill(m_point.get(), m_point.get() + N, 0);
     }
 
-    template <bool Dynamic = (ndims == -1), std::enable_if_t<Dynamic, int> = 0>
-    SequenceIterator(int N) : m_index{1}, m_x(N, 0), m_point(N, 0)
+    unsigned dimension() const noexcept { return m_dnums.size(); }
+
+    const std::unique_ptr<T[]> &get_point() const noexcept { return m_point; }
+
+    const std::unique_ptr<T[]> &advance() noexcept
     {
-        assert(N >= 1 && "Dimension less than 1 doesn't make sense\n");
+        m_index = detail::advance_sequence(dimension(), m_point.get(), m_x.get(), m_index, m_dnums);
+        return m_point;
     }
-
-    bool operator!=(const SequenceIterator &other) const noexcept
-    {
-        return (m_point.size() != other.m_point.size() || m_index != other.m_index);
-    }
-
-    const std::vector<T> &operator*() const noexcept { return m_point; }
-
-    const std::vector<T> *operator->() const noexcept { return &m_point; }
-
-    SequenceIterator &operator++() noexcept
-    {
-        if constexpr (ndims == -1)
-        {
-            m_index = detail::advance_sequence<maxdims>(
-                m_point.size(), m_point.data(), m_x.data(), m_index);
-        }
-        else
-        {
-            m_index =
-                detail::advance_sequence<ndims, maxdims>(m_point.data(), m_x.data(), m_index);
-        }
-
-        return *this;
-    }
-
-    SequenceIterator &operator++(int) noexcept { return ++(*this); }
 
   private:
     unsigned long m_index;
-    std::vector<IntType> m_x;
-    std::vector<T> m_point;
+    std::unique_ptr<IntType[]> m_x;
+    std::unique_ptr<T[]> m_point;
+    std::vector<std::array<IntType, DirectionNumbers<IntType>::nbits>> m_dnums;
 };
 
 } // namespace Sobol
