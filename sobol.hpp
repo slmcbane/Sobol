@@ -59,7 +59,10 @@ struct DirectionNumbers
 {
     static constexpr unsigned nbits = sizeof(IntType) * 8;
 
-    constexpr DirectionNumbers(unsigned dim) : m_numbers{0}
+#if __cplusplus >= 201703L
+    constexpr
+#endif
+    DirectionNumbers(unsigned dim) : m_numbers{0}
     {
         if (dim == 1)
         {
@@ -96,6 +99,8 @@ struct DirectionNumbers
 namespace detail
 {
 
+#if __cplusplus >= 201703L
+
 template <class IntType, int maxdims>
 constexpr auto get_direction_numbers_array()
 {
@@ -110,6 +115,8 @@ constexpr auto get_direction_numbers_array()
 
     return direction_numbers;
 }
+
+#endif
 
 template <class IntType>
 auto get_direction_numbers(unsigned ndims)
@@ -135,91 +142,123 @@ namespace detail
  * If index is not correct neither will be the sequence.
  * Returns the index for the next point (index + 1).
  */
-template <class IntType, class T, typename = std::enable_if_t<std::is_floating_point_v<T>>>
+template <class IntType>
 constexpr IntType advance_sequence(
-    unsigned ndims, T *point, IntType *x, IntType index,
+    unsigned ndims, IntType *x, IntType index,
     const std::vector<std::array<IntType, DirectionNumbers<IntType>::nbits>> &dnums)
 {
     assert(ndims <= dnums.size());
     for (unsigned j = 0; j < ndims; ++j)
     {
         x[j] = x[j] ^ dnums[j][count_trailing_ones(index - 1)];
-        point[j] = x[j] / std::pow(static_cast<T>(2), DirectionNumbers<IntType>::nbits);
     }
     return index + 1;
 }
 
-template <class IntType, class T, size_t Dim>
+#if __cplusplus >= 201703L
+
+template <class IntType, size_t Dim>
 constexpr IntType
-advance_sequence(std::array<T, Dim> &point, std::array<IntType, Dim> &x, IntType index)
+advance_sequence(std::array<IntType, Dim> &x, IntType index)
 {
     constexpr auto direction_numbers = detail::get_direction_numbers_array<IntType, Dim>();
     for (unsigned i = 0; i < Dim; ++i)
     {
         x[i] = x[i] ^ direction_numbers[i][count_trailing_ones(index - 1)];
-        point[i] = x[i] / std::pow(static_cast<T>(2), DirectionNumbers<IntType>::nbits);
     }
     return index + 1;
 }
 
+#endif
+
 } // namespace detail
 
-template <class IntType = uint32_t, class T = double>
+template <class IntType = uint32_t>
 class Sequence
 {
-    static_assert(std::is_floating_point_v<T> && std::is_integral_v<IntType> && std::is_unsigned_v<IntType>);
+    static_assert(std::is_integral<IntType>::value && std::is_unsigned<IntType>::value,
+        "IntType should be an unsigned integer");
 
   public:
     Sequence(int N)
-        : m_index{1}, m_x(new IntType[N]), m_point(new T[N]),
-          m_dnums(detail::get_direction_numbers<IntType>(N))
+        : m_x(new IntType[N]),
+          m_dnums(detail::get_direction_numbers<IntType>(N)),
+          m_index{1}
     {
         std::fill(m_x.get(), m_x.get() + N, 0);
-        std::fill(m_point.get(), m_point.get() + N, 0);
     }
 
     unsigned dimension() const noexcept { return m_dnums.size(); }
 
-    const std::unique_ptr<T[]> &get_point() const noexcept { return m_point; }
-
-    const std::unique_ptr<T[]> &advance() noexcept
+    void advance() noexcept
     {
         m_index =
-            detail::advance_sequence(dimension(), m_point.get(), m_x.get(), m_index, m_dnums);
-        return m_point;
+            detail::advance_sequence(dimension(), m_x.get(), m_index, m_dnums);
+    }
+
+    template <class T>
+    void advance(T *dest) noexcept
+    {
+        static_assert(std::is_floating_point<T>::value, "Point type should be floating point");
+        advance();
+        get_point(dest);
+    }
+
+    template <class T>
+    void get_point(T* dest) const noexcept
+    {
+        static_assert(std::is_floating_point<T>::value, "Point type should be floating point");
+        std::transform(m_x.get(), m_x.get() + dimension(), dest, 
+            [](IntType x) { return x / std::pow(static_cast<T>(2), DirectionNumbers<IntType>::nbits); });
     }
 
   private:
     std::unique_ptr<IntType[]> m_x;
-    std::unique_ptr<T[]> m_point;
     std::vector<std::array<IntType, DirectionNumbers<IntType>::nbits>> m_dnums;
     IntType m_index;
 };
 
-template <unsigned Dim, class IntType = uint32_t, class T = double>
+#if __cplusplus >= 201703L
+
+template <unsigned Dim, class IntType = uint32_t>
 class CompileTimeSequence
 {
-    static_assert(std::is_floating_point_v<T> && std::is_integral_v<IntType> && std::is_unsigned_v<IntType>);
+    static_assert(Dim >= 1 && std::is_integral<IntType>::value && std::is_unsigned<IntType>::value);
 
   public:
     constexpr CompileTimeSequence() noexcept
-        : m_index{1}, m_x{0}, m_point{0}
+        : m_x{0}, m_index{1} 
     {
     }
 
-    constexpr const auto &get_point() const noexcept { return m_point; }
-
-    constexpr const auto &advance() noexcept
+    constexpr void advance() noexcept
     {
-        m_index = detail::advance_sequence(m_point, m_x, m_index);
-        return m_point;
+        m_index = detail::advance_sequence(m_x, m_index);
+    }
+
+    template <class T>
+    constexpr void get_point(T *dest) const noexcept
+    {
+        static_assert(std::is_floating_point<T>::value);
+        for (unsigned i = 0; i < Dim; ++i) {
+            dest[i] = m_x[i] / std::pow(static_cast<T>(2), DirectionNumbers<IntType>::nbits);
+        }
+    }
+    
+    template <class T>
+    void advance(T *dest) noexcept
+    {
+        static_assert(std::is_floating_point<T>::value);
+        advance();
+        get_point(dest);
     }
 
   private:
     std::array<IntType, Dim> m_x;
-    std::array<T, Dim> m_point;
     IntType m_index;
 };
+
+#endif
 
 } // namespace Sobol
 

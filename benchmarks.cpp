@@ -1,36 +1,34 @@
 #include "sobol.hpp"
 #include "hayai.hpp"
 
-#include <optional>
-
 BENCHMARK(RunTime, SetUpDimension10, 1000, 1000)
 {
-    const auto &arr = Sobol::Sequence(10).get_point();
+    auto seq = Sobol::Sequence<>(10);
 }
 
 BENCHMARK(RunTime, SetUpDimension25, 1000, 500)
 {
-    const auto &arr = Sobol::Sequence(25).get_point();
+    auto seq = Sobol::Sequence<>(25);
 }
 
 BENCHMARK(RunTime, SetUpDimension200, 1000, 100)
 {
-    const auto &arr = Sobol::Sequence(200).get_point();
+    auto seq = Sobol::Sequence<>(200);
 }
 
 BENCHMARK(RunTime, SetUpDimension10_64bit, 1000, 1000)
 {
-    const auto &arr = Sobol::Sequence<uint64_t>(10).get_point();
+    auto seq = Sobol::Sequence<uint64_t>(10);
 }
 
 BENCHMARK(RunTime, SetUpDimension25_64bit, 1000, 500)
 {
-    const auto &arr = Sobol::Sequence<uint64_t>(25).get_point();
+    auto seq = Sobol::Sequence<uint64_t>(25);
 }
 
 BENCHMARK(RunTime, SetUpDimension200_64bit, 1000, 100)
 {
-    const auto &arr = Sobol::Sequence<uint64_t>(200).get_point();
+    auto seq = Sobol::Sequence<uint64_t>(200);
 }
 
 class SequenceFixture10 : public hayai::Fixture
@@ -38,14 +36,14 @@ class SequenceFixture10 : public hayai::Fixture
     public:
     virtual void SetUp()
     {
-        sequence.emplace(10);
+        sequence.reset(new Sobol::Sequence<>(10));
     }
 
     virtual void TearDown()
     {
     }
 
-    std::optional<Sobol::Sequence<uint32_t>> sequence;
+    std::unique_ptr<Sobol::Sequence<>> sequence;
 };
 
 class SequenceFixture25 : public hayai::Fixture
@@ -53,12 +51,11 @@ class SequenceFixture25 : public hayai::Fixture
     public:
     virtual void SetUp()
     {
-        sequence.emplace(25);
+        sequence.reset(new Sobol::Sequence<>(25));
     }
 
     virtual void TearDown() {} 
-
-    std::optional<Sobol::Sequence<uint32_t>> sequence;
+    std::unique_ptr<Sobol::Sequence<>> sequence;
 };
 
 class SequenceFixture200 : public hayai::Fixture
@@ -66,35 +63,38 @@ class SequenceFixture200 : public hayai::Fixture
     public:
     virtual void SetUp()
     {
-        sequence.emplace(200);
+        sequence.reset(new Sobol::Sequence<>(200));
     }
 
     virtual void TearDown() {} 
 
-    std::optional<Sobol::Sequence<uint32_t>> sequence;
+    std::unique_ptr<Sobol::Sequence<>> sequence;
 };
 
 BENCHMARK_F(SequenceFixture10, SampleDimension10, 1000, 100)
 {
+    double point[10];
     for (int i = 0; i < 1000; ++i)
     {
-        const auto &point = sequence->advance();
+        sequence->advance(point);
     }
 }
 
 BENCHMARK_F(SequenceFixture25, SampleDimension25, 1000, 100)
 {
+    double point[25];
     for (int i = 0; i < 1000; ++i)
     {
-        const auto &point = sequence->advance();
+        sequence->advance(point);
     }
 }
 
 BENCHMARK_F(SequenceFixture200, SampleDimension200, 1000, 20)
 {
+    double point[200];
     for (int i = 0; i < 1000; ++i)
     {
-        const auto &point = sequence->advance();
+        sequence->advance(point);
     }
 }
 
@@ -103,14 +103,14 @@ class SequenceFixture10_64bit : public hayai::Fixture
     public:
     virtual void SetUp()
     {
-        sequence.emplace(10);
+        sequence.reset(new Sobol::Sequence<uint64_t>(10));
     }
 
     virtual void TearDown()
     {
     }
 
-    std::optional<Sobol::Sequence<uint64_t>> sequence;
+    std::unique_ptr<Sobol::Sequence<uint64_t>> sequence;
 };
 
 class SequenceFixture25_64bit : public hayai::Fixture
@@ -118,12 +118,12 @@ class SequenceFixture25_64bit : public hayai::Fixture
     public:
     virtual void SetUp()
     {
-        sequence.emplace(25);
+        sequence.reset(new Sobol::Sequence<uint64_t>(25));
     }
 
     virtual void TearDown() {} 
 
-    std::optional<Sobol::Sequence<uint64_t>> sequence;
+    std::unique_ptr<Sobol::Sequence<uint64_t>> sequence;
 };
 
 class SequenceFixture200_64bit : public hayai::Fixture
@@ -131,56 +131,65 @@ class SequenceFixture200_64bit : public hayai::Fixture
     public:
     virtual void SetUp()
     {
-        sequence.emplace(200);
+        sequence.reset(new Sobol::Sequence<uint64_t>(200));
     }
 
     virtual void TearDown() {} 
 
-    std::optional<Sobol::Sequence<uint64_t>> sequence;
+    std::unique_ptr<Sobol::Sequence<uint64_t>> sequence;
 };
 
 BENCHMARK_F(SequenceFixture10_64bit, SampleDimension10, 1000, 100)
 {
+    double point[10];
     for (int i = 0; i < 1000; ++i)
     {
-        const auto &point = sequence->advance();
+        sequence->advance(point);
     }
 }
 
 BENCHMARK_F(SequenceFixture25_64bit, SampleDimension25, 1000, 100)
 {
+    double point[25];
     for (int i = 0; i < 1000; ++i)
     {
-        const auto &point = sequence->advance();
+        sequence->advance(point);
     }
 }
 
 BENCHMARK_F(SequenceFixture200_64bit, SampleDimension200, 1000, 20)
 {
+    double point[200];
     for (int i = 0; i < 1000; ++i)
     {
-        const auto &point = sequence->advance();
+        sequence->advance(point);
     }
 }
+
+#if __cplusplus >= 201703L
 
 BENCHMARK(CompileTime, SampleDimension10, 1000, 20)
 {
     Sobol::CompileTimeSequence<10> sequence;
+    double point[10];
 
     for (int i = 0; i < 1000; ++i)
     {
-        const auto &point = sequence.advance();
+        sequence.advance(point);
     }
 }
 BENCHMARK(CompileTime, SampleDimension25, 1000, 20)
 {
     Sobol::CompileTimeSequence<25> sequence;
+    double point[25];
 
     for (int i = 0; i < 1000; ++i)
     {
-        const auto &point = sequence.advance();
+        sequence.advance(point);
     }
 }
+
+#endif
 
 int main(int argc, char *argv[])
 {
