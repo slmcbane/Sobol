@@ -16,7 +16,7 @@
  * PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
  * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
- * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. 
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
 /*
@@ -26,28 +26,28 @@
  * 'new-joe-kuo-6.21201' and the machine-generated 'constants.hpp' contain the
  * direction numbers computed by the same authors. The copyright notice from their
  * work is reproduced here as required:
- * 
+ *
  * -----------------------------------------------------------------------------
  * Licence pertaining to sobol.cc and the accompanying sets of direction numbers
  * -----------------------------------------------------------------------------
  * Copyright (c) 2008, Frances Y. Kuo and Stephen Joe
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  *     * Redistributions of source code must retain the above copyright
  *       notice, this list of conditions and the following disclaimer.
- * 
+ *
  *     * Redistributions in binary form must reproduce the above copyright
  *       notice, this list of conditions and the following disclaimer in the
  *       documentation and/or other materials provided with the distribution.
- * 
+ *
  *     * Neither the names of the copyright holders nor the names of the
  *       University of New South Wales and the University of Waikato
  *       and its contributors may be used to endorse or promote products derived
  *       from this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
  * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -81,7 +81,7 @@ namespace detail
 
 #ifdef __GNUC__
 
-int count_trailing_ones(long unsigned i) { return __builtin_ctzl(~i); }
+inline int count_trailing_ones(long unsigned i) { return __builtin_ctzl(~i); }
 
 #else
 
@@ -104,7 +104,7 @@ int count_trailing_ones(long unsigned i)
  * This struct is responsible for computing direction numbers given the
  * * dimension
  * * underlying integer type
- * 
+ *
  * These are the v_{jk} from Joe & Kuo scaled by 2^nbits.
  *
  * It is capable of performing the computation at compile time (with C++17) OR can be
@@ -122,7 +122,8 @@ struct DirectionNumbers
 #if __cplusplus >= 201703L
     constexpr
 #endif
-    DirectionNumbers(unsigned dim) : m_numbers{0}
+        DirectionNumbers(unsigned dim)
+        : m_numbers{0}
     {
         if (dim == 1)
         {
@@ -184,7 +185,8 @@ auto get_direction_numbers(unsigned ndims)
     assert(ndims <= sizeof(coeffs) / sizeof(coeffs[0]) + 1);
     using numbers_type = std::array<IntType, DirectionNumbers<IntType>::nbits>;
 
-    std::shared_ptr<numbers_type> direction_numbers(new numbers_type[ndims], std::default_delete<numbers_type[]>());
+    std::shared_ptr<numbers_type> direction_numbers(
+        new numbers_type[ndims], std::default_delete<numbers_type[]>());
     for (unsigned i = 0; i < ndims; ++i)
     {
         *(direction_numbers.get() + i) = DirectionNumbers<IntType>(i + 1).numbers();
@@ -217,8 +219,7 @@ constexpr IntType advance_sequence(
 #if __cplusplus >= 201703L
 
 template <class IntType, size_t Dim>
-constexpr IntType
-advance_sequence(std::array<IntType, Dim> &x, IntType index)
+constexpr IntType advance_sequence(std::array<IntType, Dim> &x, IntType index)
 {
     constexpr auto direction_numbers = detail::get_direction_numbers_array<IntType, Dim>();
     for (unsigned i = 0; i < Dim; ++i)
@@ -239,7 +240,7 @@ advance_sequence(std::array<IntType, Dim> &x, IntType index)
  * floating point type. To advance the sequence, call `advance()` or
  * `advance(T *dest)` to advance the sequence and retrieve the next point in
  * a single call.
- * 
+ *
  * The template argument is the integer type to use for computations. For
  * performance, 32-bit is the default. For even faster computations, 16 or
  * even 8-bit integers could be used; HOWEVER, if more than 2^nbits points
@@ -251,14 +252,14 @@ advance_sequence(std::array<IntType, Dim> &x, IntType index)
 template <class IntType = uint32_t>
 class Sequence
 {
-    static_assert(std::is_integral<IntType>::value && std::is_unsigned<IntType>::value,
+    static_assert(
+        std::is_integral<IntType>::value && std::is_unsigned<IntType>::value,
         "IntType should be an unsigned integer");
 
   public:
     Sequence(unsigned N)
         : m_x(new IntType[N]),
-          m_dnums(detail::get_direction_numbers<IntType>(N)),
-          m_index{1}, m_dim{N}
+          m_dnums(detail::get_direction_numbers<IntType>(N)), m_index{1}, m_dim{N}
     {
         std::fill(m_x.get(), m_x.get() + N, 0);
     }
@@ -273,7 +274,7 @@ class Sequence
         }
         new_sequence.m_dnums = m_dnums;
         new_sequence.m_index = m_index;
-        new_sequence.m_dim   = m_dim;
+        new_sequence.m_dim = m_dim;
         return new_sequence;
     }
 
@@ -281,8 +282,7 @@ class Sequence
 
     void advance() noexcept
     {
-        m_index =
-            detail::advance_sequence(dimension(), m_x.get(), m_index, m_dnums.get());
+        m_index = detail::advance_sequence(dimension(), m_x.get(), m_index, m_dnums.get());
     }
 
     template <class T>
@@ -294,11 +294,13 @@ class Sequence
     }
 
     template <class T>
-    void get_point(T* dest) const noexcept
+    void get_point(T *dest) const noexcept
     {
         static_assert(std::is_floating_point<T>::value, "Point type should be floating point");
-        std::transform(m_x.get(), m_x.get() + m_dim, dest, 
-            [](IntType x) { return x / std::pow(static_cast<T>(2), DirectionNumbers<IntType>::nbits); });
+        std::transform(
+            m_x.get(), m_x.get() + m_dim, dest,
+            [](IntType x)
+            { return x / std::pow(static_cast<T>(2), DirectionNumbers<IntType>::nbits); });
     }
 
   private:
@@ -318,7 +320,7 @@ class Sequence
  * computed at compile time as well. The CompileTimeSequence can then be
  * used to generate a list of integration points that will be embedded in
  * machine code, for example.
- * 
+ *
  * For small dimensions, it may be *extremely* fast to use the
  * CompileTimeSequence for run-time computations. This is highly dependent
  * on compiler optimizations, however, and I've also observed while benchmarking
@@ -328,28 +330,24 @@ class Sequence
 template <unsigned Dim, class IntType = uint32_t>
 class CompileTimeSequence
 {
-    static_assert(Dim >= 1 && std::is_integral<IntType>::value && std::is_unsigned<IntType>::value);
+    static_assert(
+        Dim >= 1 && std::is_integral<IntType>::value && std::is_unsigned<IntType>::value);
 
   public:
-    constexpr CompileTimeSequence() noexcept
-        : m_x{0}, m_index{1} 
-    {
-    }
+    constexpr CompileTimeSequence() noexcept : m_x{0}, m_index{1} {}
 
-    constexpr void advance() noexcept
-    {
-        m_index = detail::advance_sequence(m_x, m_index);
-    }
+    constexpr void advance() noexcept { m_index = detail::advance_sequence(m_x, m_index); }
 
     template <class T>
     constexpr void get_point(T *dest) const noexcept
     {
         static_assert(std::is_floating_point<T>::value);
-        for (unsigned i = 0; i < Dim; ++i) {
+        for (unsigned i = 0; i < Dim; ++i)
+        {
             dest[i] = m_x[i] / std::pow(static_cast<T>(2), DirectionNumbers<IntType>::nbits);
         }
     }
-    
+
     template <class T>
     void advance(T *dest) noexcept
     {
