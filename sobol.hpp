@@ -81,11 +81,13 @@ namespace detail
 
 #ifdef __GNUC__
 
-inline int count_trailing_ones(long unsigned i) { return __builtin_ctzl(~i); }
+// Whether this works is compiler-dependent. Replace with the version below if it
+// won't compile.
+constexpr inline int count_trailing_ones(long unsigned i) { return __builtin_ctzl(~i); }
 
 #else
 
-int count_trailing_ones(long unsigned i)
+constexpr inline int count_trailing_ones(long unsigned i)
 {
     int pos = 0;
     while (i & 1)
@@ -94,6 +96,25 @@ int count_trailing_ones(long unsigned i)
         pos += 1;
     }
     return pos;
+}
+
+#endif
+
+#if __cplusplus >= 201703L
+
+template <class T, int P>
+constexpr T two_to_the_p()
+{
+    static_assert(std::is_floating_point<T>::value, "T should be a floating point type");
+
+    if constexpr (P < 64)
+    {
+        return static_cast<T>(static_cast<uint64_t>(1) << P);
+    }
+    else
+    {
+        return two_to_the_p<T, 63>() * two_to_the_p<T, 64 - P>();
+    }
 }
 
 #endif
@@ -344,12 +365,12 @@ class CompileTimeSequence
         static_assert(std::is_floating_point<T>::value);
         for (unsigned i = 0; i < Dim; ++i)
         {
-            dest[i] = m_x[i] / std::pow(static_cast<T>(2), DirectionNumbers<IntType>::nbits);
+            dest[i] = m_x[i] / detail::two_to_the_p<T, DirectionNumbers<IntType>::nbits>();
         }
     }
 
     template <class T>
-    void advance(T *dest) noexcept
+    constexpr void advance(T *dest) noexcept
     {
         static_assert(std::is_floating_point<T>::value);
         advance();
@@ -367,10 +388,156 @@ class CompileTimeSequence
 
 /********************************************************************************
  * Below this point is just tests, which can be run by compiling "testsuite.cpp"
- * Reading the tests may be instructive if you're trying to learn how the code
- * functions.
+ * The tests also serve as examples for usage.
+ *
+ * These tests assume the use of the direction numbers included with this
+ * repository and are not correct with different sets of direction numbers.
  *******************************************************************************/
 #ifdef DOCTEST_LIBRARY_INCLUDED
+
+TEST_CASE("Single-variable runtime generation - first 10 numbers")
+{
+    Sobol::Sequence<> seq32(1);
+    Sobol::Sequence<uint8_t> seq8(1);
+    Sobol::Sequence<uint16_t> seq16(1);
+    Sobol::Sequence<uint64_t> seq64(1);
+
+    double val, val2;
+
+    seq32.get_point(&val);
+    REQUIRE(val == 0);
+    seq8.get_point(&val2);
+    REQUIRE(val2 == val);
+    seq16.get_point(&val2);
+    REQUIRE(val2 == val);
+    seq64.get_point(&val2);
+    REQUIRE(val2 == val);
+
+    seq32.advance(&val);
+    REQUIRE(val == 0.5);
+    seq8.advance(&val2);
+    REQUIRE(val2 == val);
+    seq16.advance(&val2);
+    REQUIRE(val2 == val);
+    seq64.advance(&val2);
+    REQUIRE(val2 == val);
+
+    seq32.advance(&val);
+    REQUIRE(val == 0.75);
+    seq8.advance(&val2);
+    REQUIRE(val2 == val);
+    seq16.advance(&val2);
+    REQUIRE(val2 == val);
+    seq64.advance(&val2);
+    REQUIRE(val2 == val);
+
+    seq32.advance(&val);
+    REQUIRE(val == 0.25);
+    seq8.advance(&val2);
+    REQUIRE(val2 == val);
+    seq16.advance(&val2);
+    REQUIRE(val2 == val);
+    seq64.advance(&val2);
+    REQUIRE(val2 == val);
+
+    seq32.advance(&val);
+    REQUIRE(val == 0.375);
+    seq8.advance(&val2);
+    REQUIRE(val2 == val);
+    seq16.advance(&val2);
+    REQUIRE(val2 == val);
+    seq64.advance(&val2);
+    REQUIRE(val2 == val);
+
+    seq32.advance(&val);
+    REQUIRE(val == 0.875);
+    seq8.advance(&val2);
+    REQUIRE(val2 == val);
+    seq16.advance(&val2);
+    REQUIRE(val2 == val);
+    seq64.advance(&val2);
+    REQUIRE(val2 == val);
+
+    seq32.advance(&val);
+    REQUIRE(val == 0.625);
+    seq8.advance(&val2);
+    REQUIRE(val2 == val);
+    seq16.advance(&val2);
+    REQUIRE(val2 == val);
+    seq64.advance(&val2);
+    REQUIRE(val2 == val);
+
+    seq32.advance(&val);
+    REQUIRE(val == 0.125);
+    seq8.advance(&val2);
+    REQUIRE(val2 == val);
+    seq16.advance(&val2);
+    REQUIRE(val2 == val);
+    seq64.advance(&val2);
+    REQUIRE(val2 == val);
+
+    seq32.advance(&val);
+    REQUIRE(val == 0.1875);
+    seq8.advance(&val2);
+    REQUIRE(val2 == val);
+    seq16.advance(&val2);
+    REQUIRE(val2 == val);
+    seq64.advance(&val2);
+    REQUIRE(val2 == val);
+
+    seq32.advance(&val);
+    REQUIRE(val == 0.6875);
+    seq8.advance(&val2);
+    REQUIRE(val2 == val);
+    seq16.advance(&val2);
+    REQUIRE(val2 == val);
+    seq64.advance(&val2);
+    REQUIRE(val2 == val);
+} // TEST_CASE
+
+#if __cplusplus >= 201703L
+
+constexpr auto get_first_ten_terms()
+{
+    Sobol::CompileTimeSequence<2, uint8_t> sequence;
+
+    std::array<std::array<float, 2>, 10> arr{0};
+    sequence.get_point(arr[0].data());
+
+    for (int i = 0; i < 9; ++i)
+    {
+        sequence.advance(arr[i + 1].data());
+    }
+    return arr;
+}
+
+constexpr auto first_ten = get_first_ten_terms();
+
+TEST_CASE("Test compile-time generation of the first few points")
+{
+    REQUIRE(first_ten[0][0] == 0);
+    REQUIRE(first_ten[0][1] == 0);
+    REQUIRE(first_ten[1][0] == 0.5);
+    REQUIRE(first_ten[1][1] == 0.5);
+    REQUIRE(first_ten[2][0] == 0.75);
+    REQUIRE(first_ten[2][1] == 0.25);
+    REQUIRE(first_ten[3][0] == 0.25);
+    REQUIRE(first_ten[3][1] == 0.75);
+    REQUIRE(first_ten[4][0] == 0.375);
+    REQUIRE(first_ten[4][1] == 0.375);
+    REQUIRE(first_ten[5][0] == 0.875);
+    REQUIRE(first_ten[5][1] == 0.875);
+    REQUIRE(first_ten[6][0] == 0.625);
+    REQUIRE(first_ten[6][1] == 0.125);
+    REQUIRE(first_ten[7][0] == 0.125);
+    REQUIRE(first_ten[7][1] == 0.625);
+    REQUIRE(first_ten[8][0] == 0.1875);
+    REQUIRE(first_ten[8][1] == 0.3125);
+    REQUIRE(first_ten[9][0] == 0.6875);
+    REQUIRE(first_ten[9][1] == 0.8125);
+}
+
+#endif // 201703L
 
 #endif // DOCTEST_LIBRARY_INCLUDED
 
