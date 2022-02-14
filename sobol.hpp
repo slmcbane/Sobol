@@ -201,7 +201,8 @@ constexpr auto get_direction_numbers_array()
 #endif
 
 template <class IntType>
-auto get_direction_numbers(unsigned ndims)
+std::shared_ptr<std::array<IntType, DirectionNumbers<IntType>::nbits>>
+get_direction_numbers(unsigned ndims)
 {
     assert(ndims <= sizeof(coeffs) / sizeof(coeffs[0]) + 1);
     using numbers_type = std::array<IntType, DirectionNumbers<IntType>::nbits>;
@@ -226,7 +227,7 @@ namespace detail
  * Returns the index for the next point (index + 1).
  */
 template <class IntType>
-constexpr IntType advance_sequence(
+IntType advance_sequence(
     unsigned ndims, IntType *x, IntType index,
     const std::array<IntType, DirectionNumbers<IntType>::nbits> *dnums)
 {
