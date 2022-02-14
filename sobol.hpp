@@ -537,7 +537,95 @@ TEST_CASE("Test compile-time generation of the first few points")
     REQUIRE(first_ten[9][1] == 0.8125);
 }
 
+TEST_CASE("Compare a bunch of points between run-time and compile-time generation")
+{
+    Sobol::Sequence run_time_sequence(20);
+    Sobol::CompileTimeSequence<20> compile_time_sequence;
+
+    for (int i = 0; i < 66666; ++i)
+    {
+        run_time_sequence.advance();
+        compile_time_sequence.advance();
+    }
+
+    double rtval[20];
+    double ctval[20];
+    for (int i = 0; i < 1000; ++i)
+    {
+        run_time_sequence.advance(rtval);
+        compile_time_sequence.advance(ctval);
+
+        for (int j = 0; j < 20; ++j)
+        {
+            REQUIRE(rtval[j] == ctval[j]);
+        }
+    }
+} // TEST_CASE
+
 #endif // 201703L
+
+TEST_CASE("Test a bunch of random, high-dimensional points")
+{
+    Sobol::Sequence<uint64_t> sequence(20201);
+
+    unsigned i = 1;
+    auto point = std::unique_ptr<double[]>(new double[20201]);
+
+    while (i != 114)
+    {
+        sequence.advance();
+        i += 1;
+    }
+
+    sequence.get_point(point.get());
+    REQUIRE(point[8490] == 0.7578125);
+    REQUIRE(point[20200] == 0.8984375);
+
+    while (i != 589)
+    {
+        sequence.advance();
+        i += 1;
+    }
+
+    sequence.get_point(point.get());
+    REQUIRE(point[603] == 0.1083984375);
+
+    while (i != 618)
+    {
+        sequence.advance();
+        i += 1;
+    }
+
+    sequence.get_point(point.get());
+    REQUIRE(point[4376] == 0.4033203125);
+
+    while (i != 944)
+    {
+        sequence.advance();
+        i += 1;
+    }
+
+    sequence.get_point(point.get());
+    REQUIRE(point[15308] == 0.5009765625);
+
+    while (i != 4592)
+    {
+        sequence.advance();
+        i += 1;
+    }
+
+    sequence.get_point(point.get());
+    REQUIRE(point[17373] == 0.9517822265625);
+
+    while (i != 7788)
+    {
+        sequence.advance();
+        i += 1;
+    }
+
+    sequence.get_point(point.get());
+    REQUIRE(point[16732] == 0.7423095703125);
+} // TEST_CASE
 
 #endif // DOCTEST_LIBRARY_INCLUDED
 
