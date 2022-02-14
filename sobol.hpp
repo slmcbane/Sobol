@@ -184,10 +184,10 @@ auto get_direction_numbers(unsigned ndims)
     assert(ndims <= sizeof(coeffs) / sizeof(coeffs[0]) + 1);
     using numbers_type = std::array<IntType, DirectionNumbers<IntType>::nbits>;
 
-    std::unique_ptr<numbers_type[]> direction_numbers(new numbers_type[ndims]);
+    std::shared_ptr<numbers_type> direction_numbers(new numbers_type[ndims], std::default_delete<numbers_type[]>());
     for (unsigned i = 0; i < ndims; ++i)
     {
-        direction_numbers[i] = DirectionNumbers<IntType>(i + 1).numbers();
+        *(direction_numbers.get() + i) = DirectionNumbers<IntType>(i + 1).numbers();
     }
     return direction_numbers;
 }
@@ -263,6 +263,20 @@ class Sequence
         std::fill(m_x.get(), m_x.get() + N, 0);
     }
 
+    Sequence clone()
+    {
+        Sequence new_sequence;
+        new_sequence.m_x.reset(new IntType[m_dim]);
+        for (unsigned i = 0; i < m_dim; ++i)
+        {
+            new_sequence.m_x[i] = m_x[i];
+        }
+        new_sequence.m_dnums = m_dnums;
+        new_sequence.m_index = m_index;
+        new_sequence.m_dim   = m_dim;
+        return new_sequence;
+    }
+
     unsigned dimension() const noexcept { return m_dim; }
 
     void advance() noexcept
@@ -289,9 +303,11 @@ class Sequence
 
   private:
     std::unique_ptr<IntType[]> m_x;
-    std::unique_ptr<std::array<IntType, DirectionNumbers<IntType>::nbits>[]> m_dnums;
+    std::shared_ptr<std::array<IntType, DirectionNumbers<IntType>::nbits>> m_dnums;
     IntType m_index;
     unsigned m_dim;
+
+    Sequence() = default;
 };
 
 #if __cplusplus >= 201703L
