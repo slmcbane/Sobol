@@ -8,7 +8,6 @@
 #include <memory>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 #include "constants.hpp"
 
@@ -121,12 +120,12 @@ template <class IntType>
 auto get_direction_numbers(unsigned ndims)
 {
     assert(ndims <= sizeof(coeffs) / sizeof(coeffs[0]) + 1);
+    using numbers_type = std::array<IntType, DirectionNumbers<IntType>::nbits>;
 
-    std::vector<std::array<IntType, DirectionNumbers<IntType>::nbits>> direction_numbers;
-    direction_numbers.reserve(ndims);
+    std::unique_ptr<numbers_type[]> direction_numbers(new numbers_type[ndims]);
     for (unsigned i = 0; i < ndims; ++i)
     {
-        direction_numbers.emplace_back(DirectionNumbers<IntType>(i + 1).numbers());
+        direction_numbers[i] = DirectionNumbers<IntType>(i + 1).numbers();
     }
     return direction_numbers;
 }
@@ -144,9 +143,8 @@ namespace detail
 template <class IntType>
 constexpr IntType advance_sequence(
     unsigned ndims, IntType *x, IntType index,
-    const std::vector<std::array<IntType, DirectionNumbers<IntType>::nbits>> &dnums)
+    const std::array<IntType, DirectionNumbers<IntType>::nbits> *dnums)
 {
-    assert(ndims <= dnums.size());
     for (unsigned j = 0; j < ndims; ++j)
     {
         x[j] = x[j] ^ dnums[j][count_trailing_ones(index - 1)];
@@ -195,20 +193,20 @@ class Sequence
         "IntType should be an unsigned integer");
 
   public:
-    Sequence(int N)
+    Sequence(unsigned N)
         : m_x(new IntType[N]),
           m_dnums(detail::get_direction_numbers<IntType>(N)),
-          m_index{1}
+          m_index{1}, m_dim{N}
     {
         std::fill(m_x.get(), m_x.get() + N, 0);
     }
 
-    unsigned dimension() const noexcept { return m_dnums.size(); }
+    unsigned dimension() const noexcept { return m_dim; }
 
     void advance() noexcept
     {
         m_index =
-            detail::advance_sequence(dimension(), m_x.get(), m_index, m_dnums);
+            detail::advance_sequence(dimension(), m_x.get(), m_index, m_dnums.get());
     }
 
     template <class T>
@@ -223,14 +221,15 @@ class Sequence
     void get_point(T* dest) const noexcept
     {
         static_assert(std::is_floating_point<T>::value, "Point type should be floating point");
-        std::transform(m_x.get(), m_x.get() + dimension(), dest, 
+        std::transform(m_x.get(), m_x.get() + m_dim, dest, 
             [](IntType x) { return x / std::pow(static_cast<T>(2), DirectionNumbers<IntType>::nbits); });
     }
 
   private:
     std::unique_ptr<IntType[]> m_x;
-    std::vector<std::array<IntType, DirectionNumbers<IntType>::nbits>> m_dnums;
+    std::unique_ptr<std::array<IntType, DirectionNumbers<IntType>::nbits>[]> m_dnums;
     IntType m_index;
+    unsigned m_dim;
 };
 
 #if __cplusplus >= 201703L
