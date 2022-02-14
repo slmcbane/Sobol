@@ -43,16 +43,15 @@ int count_trailing_ones(long unsigned i)
  * This struct is responsible for computing direction numbers given the
  * * dimension
  * * underlying integer type
+ * 
+ * These are the v_{jk} from Joe & Kuo scaled by 2^nbits.
  *
- * It is capable of performing the computation at compile time OR can be
+ * It is capable of performing the computation at compile time (with C++17) OR can be
  * used at run time. At compile time, a snippet like:
  *
  *   constexpr auto direction_numbers = DirectionNumbers<uint64_t>(dim).numbers();
  *
  * will return an array of direction numbers 1-64 as computed by the compiler.
- *
- * Note that the array returned by numbers() is the direction numbers scaled by
- * 2^nbits, where nbits is the number of bits in IntType.
  */
 template <typename IntType>
 struct DirectionNumbers
@@ -173,6 +172,22 @@ advance_sequence(std::array<IntType, Dim> &x, IntType index)
 
 } // namespace detail
 
+/*
+ * Sequence acts as an iterator for a Sobol sequence (although it does not implement
+ * a C++ iterator interface). Construct a sequence given its dimension (>= 1).
+ * To retrieve the current point, call `get_point(T *dest)` where T is a
+ * floating point type. To advance the sequence, call `advance()` or
+ * `advance(T *dest)` to advance the sequence and retrieve the next point in
+ * a single call.
+ * 
+ * The template argument is the integer type to use for computations. For
+ * performance, 32-bit is the default. For even faster computations, 16 or
+ * even 8-bit integers could be used; HOWEVER, if more than 2^nbits points
+ * are generated you will encounter undefined behavior, and for large
+ * dimensions direction numbers will begin to overflow the integer type for
+ * these smaller types. For generating a few points in a few dimensions,
+ * 8 or 16-bit computations will be fastest.
+ */
 template <class IntType = uint32_t>
 class Sequence
 {
@@ -220,6 +235,19 @@ class Sequence
 
 #if __cplusplus >= 201703L
 
+/*
+ * The CompileTimeSequence has the same interface as Sequence, but does
+ * not allocate and all methods are constexpr. Direction numbers are
+ * computed at compile time as well. The CompileTimeSequence can then be
+ * used to generate a list of integration points that will be embedded in
+ * machine code, for example.
+ * 
+ * For small dimensions, it may be *extremely* fast to use the
+ * CompileTimeSequence for run-time computations. This is highly dependent
+ * on compiler optimizations, however, and I've also observed while benchmarking
+ * that sometimes the CompileTimeSequence is slower, despite having direction
+ * numbers precomputed.
+ */
 template <unsigned Dim, class IntType = uint32_t>
 class CompileTimeSequence
 {
