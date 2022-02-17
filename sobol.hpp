@@ -72,6 +72,7 @@
 #include <utility>
 
 #include "constants.hpp"
+#include "stokhos.hpp"
 
 namespace Sobol
 {
@@ -255,6 +256,9 @@ constexpr IntType advance_sequence(std::array<IntType, Dim> &x, IntType index)
 
 } // namespace detail
 
+template <class IntType>
+class RandomizedSequence;
+
 /*
  * Sequence acts as an iterator for a Sobol sequence (although it does not implement
  * a C++ iterator interface). Construct a sequence given its dimension (>= 1).
@@ -277,6 +281,8 @@ class Sequence
     static_assert(
         std::is_integral<IntType>::value && std::is_unsigned<IntType>::value,
         "IntType should be an unsigned integer");
+
+    friend class RandomizedSequence<IntType>;
 
   public:
     Sequence(unsigned N)
@@ -384,6 +390,77 @@ class CompileTimeSequence
 };
 
 #endif
+
+/*
+ * A randomized Sobol' sequence useful for quasi-Monte Carlo simulations.
+ * Uses a random digital shift to preserve equidistribution of the sequence.
+ */
+template <class IntType = uint32_t>
+class RandomizedSequence
+{
+  public:
+    RandomizedSequence(unsigned N) : m_seq(N), m_scramble(new IntType[N])
+    {
+        stokhos::TruncatedGenerator<stokhos::Xoshiro256starstar, IntType> rng(
+            (stokhos::Xoshiro256starstar()));
+
+        for (unsigned i = 0; i < N; ++i)
+        {
+            m_scramble[i] = rng();
+        }
+    }
+
+    explicit RandomizedSequence(unsigned N, uint64_t seed) : m_seq(N), m_scramble(new IntType[N])
+    {
+        stokhos::TruncatedGenerator<stokhos::Xoshiro256starstar, IntType> rng(
+            stokhos::Xoshiro256starstar(seed));
+
+        for (unsigned i = 0; i < N; ++i)
+        {
+            m_scramble[i] = rng();
+        }
+    }
+
+    RandomizedSequence clone()
+    {
+        RandomizedSequence new_sequence;
+
+        new_sequence.m_seq = m_seq.clone();
+        new_sequence.m_scramble.reset(new IntType[m_seq.dimension()]);
+        for (unsigned i = 0; i < m_seq.dimension(); ++i)
+        {
+            new_sequence.m_scramble[i] = m_scramble[i];
+        }
+    }
+
+    unsigned dimension() const noexcept { return m_seq.dimension(); }
+
+    void advance() noexcept { m_seq.advance(); }
+
+    template <class T>
+    void advance(T *dest) noexcept
+    {
+        advance();
+        get_point(dest);
+    }
+
+    template <class T>
+    void get_point(T *dest) const noexcept
+    {
+        static_assert(std::is_floating_point<T>::value, "Point type should be floating point");
+        for (unsigned i = 0; i < dimension(); ++i)
+        {
+            dest[i] = (m_seq.m_x[i] ^ m_scramble[i]) /
+                      (std::pow(static_cast<T>(2), DirectionNumbers<IntType>::nbits));
+        }
+    }
+
+  private:
+    Sequence<IntType> m_seq;
+    std::unique_ptr<IntType[]> m_scramble;
+
+    RandomizedSequence() = default;
+};
 
 } // namespace Sobol
 
