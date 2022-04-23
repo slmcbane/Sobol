@@ -325,10 +325,9 @@ class Sequence
     void get_point(T *dest) const noexcept
     {
         static_assert(std::is_floating_point<T>::value, "Point type should be floating point");
-        std::transform(
-            m_x.get(), m_x.get() + m_dim, dest,
-            [](IntType x)
-            { return x / std::pow(static_cast<T>(2), DirectionNumbers<IntType>::nbits); });
+        std::transform(m_x.get(), m_x.get() + m_dim, dest, [](IntType x) {
+            return x / std::pow(static_cast<T>(2), DirectionNumbers<IntType>::nbits);
+        });
     }
 
   private:
@@ -412,7 +411,7 @@ class RandomizedSequence
 
     explicit RandomizedSequence(unsigned N, uint64_t seed) : m_seq(N), m_scramble(new IntType[N])
     {
-        stokhos::TruncatedGenerator<stokhos::Xoshiro256starstar, IntType> rng(
+        auto rng = stokhos::TruncatedGenerator<stokhos::Xoshiro256starstar, IntType>(
             stokhos::Xoshiro256starstar(seed));
 
         for (unsigned i = 0; i < N; ++i)
